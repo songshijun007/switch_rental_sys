@@ -38,41 +38,21 @@ jobs:
           apt-get update || true
           apt-get install -y --no-install-recommends zip
 
-          echo "=== Locating dkp-pacman ==="
-          which dkp-pacman || find / -iname "*dkp-pacman*" 2>/dev/null || true
-
           if command -v dkp-pacman >/dev/null 2>&1; then
             dkp-pacman --noconfirm -Syu || true
             dkp-pacman --noconfirm -S switch-dev || true
-          else
-            echo "⚠️ dkp-pacman not found, assuming switch-dev is pre-installed in base image."
           fi
 
-          # ✅ 只做"软"验证，不因缺少某个文件而中断构建
-          echo "=== Verifying installation (non-blocking) ==="
-          if [ -f /opt/devkitpro/libnx/include/switch.h ]; then
-            echo "✅ switch.h found"
-          else
-            echo "❌ switch.h NOT found"
-          fi
+          echo "=== Verifying installation ==="
+          test -f /opt/devkitpro/libnx/include/switch.h && echo "✅ switch.h found"
+          test -f /opt/devkitpro/libnx/lib/libnx.a && echo "✅ libnx.a found"
 
-          echo "--- Searching for libnx pkgconfig files ---"
-          find /opt/devkitpro -iname "*.pc" 2>/dev/null | grep -i nx || echo "No libnx .pc file found (this may be normal)"
-
-          echo "--- devkitpro libnx directory listing ---"
-          ls -la /opt/devkitpro/libnx/lib/ 2>/dev/null || true
-          ls -la /opt/devkitpro/libnx/lib/pkgconfig/ 2>/dev/null || true
-
-          echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
           elf2nro --version || true
 
       - name: Build NRO
         run: |
           set -e
-          # ✅ 即使 pkgconfig 文件不存在，也不影响大多数基于 libnx Makefile 模板的项目
-          export PKG_CONFIG_PATH=$DEVKITPRO/libnx/lib/pkgconfig:$DEVKITPRO/portlibs/switch/lib/pkgconfig
-
           if [ -n "${{ secrets.RENTAL_SALT }}" ]; then
             export SALT_ARG="RENTAL_SALT=${{ secrets.RENTAL_SALT }}"
           else
