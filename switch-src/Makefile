@@ -29,15 +29,21 @@ APP_TITLE   := PCTL All-in-One Rental
 APP_AUTHOR  := Rental Edition
 APP_VERSION := 1.1.0
 
+# ✅ 直接指定 libnx 所在目录，不再依赖 pkg-config
+LIBDIRS     := $(DEVKITPRO)/libnx $(DEVKITPRO)/portlibs/switch
+
 ARCH        := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 CFLAGS      := -g -Wall -O2 -ffunction-sections -fdata-sections \
                -DDEFAULT_SALT=\"$(RENTAL_SALT)\" \
-               -DDEFAULT_PERIOD_DAYS=$(RENTAL_PERIOD_DAYS)
-CFLAGS      += $(ARCH) $(INCLUDE) `aarch64-none-elf-pkg-config --cflags libnx`
+               -DDEFAULT_PERIOD_DAYS=$(RENTAL_PERIOD_DAYS) \
+               -D__SWITCH__
+CFLAGS      += $(ARCH) $(INCLUDE)
 CXXFLAGS    := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS     := -g $(ARCH)
 LDFLAGS     := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
-LIBS        := `aarch64-none-elf-pkg-config --libs libnx`
+
+# ✅ 直接写死 libnx 的 lib 路径和库名，不再依赖 pkg-config
+LIBS        := -L$(DEVKITPRO)/libnx/lib -lnx
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 
