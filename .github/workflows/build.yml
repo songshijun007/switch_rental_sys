@@ -17,7 +17,13 @@ jobs:
       run:
         working-directory: switch-src
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Install host utilities
+        working-directory: /
         run: |
           set -e
           export DEBIAN_FRONTEND=noninteractive
@@ -28,11 +34,6 @@ jobs:
           echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
           elf2nro --version || true
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Build NRO
         run: |
