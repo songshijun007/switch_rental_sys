@@ -48,20 +48,48 @@ jobs:
             echo "⚠️ dkp-pacman not found, assuming switch-dev is pre-installed in base image."
           fi
 
-          # ✅ 只做"软"验证，不因缺少某个文件而中断构建
-          echo "=== Verifying installation (non-blocking) ==="
+          echo "=== Verifying installation ==="
           if [ -f /opt/devkitpro/libnx/include/switch.h ]; then
             echo "✅ switch.h found"
           else
             echo "❌ switch.h NOT found"
+            exit 1
           fi
 
-          echo "--- Searching for libnx pkgconfig files ---"
-          find /opt/devkitpro -iname "*.pc" 2>/dev/null | grep -i nx || echo "No libnx .pc file found (this may be normal)"
+          if [ -f /opt/devkitpro/libnx/lib/libnx.a ]; then
+            echo "✅ libnx.a found"
+          else
+            echo "❌ libnx.a NOT found"
+            exit 1
+          fi
 
-          echo "--- devkitpro libnx directory listing ---"
-          ls -la /opt/devkitpro/libnx/lib/ 2>/dev/null || true
-          ls -la /opt/devkitpro/libnx/lib/pkgconfig/ 2>/dev/null || true
+          # ✅ 关键修复：libnx.pc 在新版本里可能缺失，手动生成作为兜底
+          PKG_DIR=/opt/devkitpro/libnx/lib/pkgconfig
+          mkdir -p "$PKG_DIR"
+          if [ ! -f "$PKG_DIR/libnx.pc" ]; then
+            echo "⚠️ libnx.pc missing, generating manually..."
+            cat > "$PKG_DIR/libnx.pc" <<'EOF'
+prefix=/opt/devkitpro/libnx
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libnx
+Description: libnx - Nintendo Switch homebrew library
+Version: 4.12.0
+Libs: -L${libdir} -lnx
+Cflags: -I${includedir}
+EOF
+            echo "✅ Generated $PKG_DIR/libnx.pc"
+          else
+            echo "✅ libnx.pc already exists"
+          fi
+
+          echo "--- Final pkgconfig check ---"
+          export PKG_CONFIG_PATH=/opt/devkitpro/libnx/lib/pkgconfig
+          pkg-config --exists libnx && echo "✅ pkg-config can find libnx" || echo "❌ pkg-config still cannot find libnx"
+          pkg-config --cflags libnx
+          pkg-config --libs libnx
 
           echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
@@ -70,7 +98,7 @@ jobs:
       - name: Build NRO
         run: |
           set -e
-          # ✅ 即使 pkgconfig 文件不存在，也不影响大多数基于 libnx Makefile 模板的项目
+          # ✅ 确保 pkg-config 能找到刚才生成的 libnx.pc
           export PKG_CONFIG_PATH=$DEVKITPRO/libnx/lib/pkgconfig:$DEVKITPRO/portlibs/switch/lib/pkgconfig
 
           if [ -n "${{ secrets.RENTAL_SALT }}" ]; then
