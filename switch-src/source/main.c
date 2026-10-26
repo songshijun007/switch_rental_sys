@@ -10,6 +10,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "rental.h"
 #include "miniserv.h"
@@ -40,8 +42,8 @@ static void wait_any_key(void) {
     while (appletMainLoop()) {
         padUpdate(&g_pad);
         u64 k = padGetButtonsDown(&g_pad);
-        if (k & HidKey_A) break;
-        if (k & HidKey_B) break;
+        if (k & HidNpadButton_A) break;
+        if (k & HidNpadButton_B) break;
         miniserv_pump(&g_srv);
         svcSleepThread(16 * 1000 * 1000ULL);
     }
@@ -53,9 +55,14 @@ static int prompt_key(char *out, size_t out_sz) {
     SwkbdConfig swkbd;
     static char tmp[16];
     swkbdCreate(&swkbd, 0);
-    swkbdConfigMakePresetDigit(&swkbd);
+    swkbdConfigMakePresetDefault(&swkbd);
+    swkbdConfigSetType(&swkbd, SwkbdType_NumPad);
     swkbdConfigSetHeaderText(&swkbd, "Enter 8-digit unlock key");
-    swkbdConfigSetSubText(&swkbd, "Machine code: %s", rental_machine_code(&g_state));
+
+    char subtext[96];
+    snprintf(subtext, sizeof(subtext), "Machine code: %s", rental_machine_code(&g_state));
+    swkbdConfigSetSubText(&swkbd, subtext);
+
     swkbdConfigSetStringLenMax(&swkbd, 8);
     swkbdConfigSetStringLenMin(&swkbd, 8);
 
@@ -182,9 +189,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "rental_init failed\n");
     }
 
-    // Bring up the network (request auto connection) so the web UI works.
-    nifmRequestAutoConnection();
-
     // Initial enforcement based on current state.
     uint64_t now = (uint64_t)time(NULL);
     rental_status_t initial = rental_check(&g_cfg, &g_state, now, NULL, NULL);
@@ -218,13 +222,14 @@ int main(int argc, char* argv[]) {
 
         int cur, paid;
         rental_status_t st = rental_check(&g_cfg, &g_state, now, &cur, &paid);
+        (void)st;
 
-        if (k & HidKey_Plus) {
+        if (k & HidNpadButton_Plus) {
             running = false;
             break;
         }
 
-        if (k & HidKey_A) {
+        if (k & HidNpadButton_A) {
             print_header(now);
             printf("\nMenu:\n");
             printf("  A - Enter unlock key\n");
@@ -238,10 +243,10 @@ int main(int argc, char* argv[]) {
                 padUpdate(&g_pad);
                 u64 mk = padGetButtonsDown(&g_pad);
                 miniserv_pump(&g_srv);
-                if (mk & HidKey_A) { do_enter_key(); in_menu = false; }
-                else if (mk & HidKey_X) { do_show_current_key(); wait_any_key(); in_menu = false; }
-                else if (mk & HidKey_Y) { do_toggle_force(); wait_any_key(); in_menu = false; }
-                else if (mk & (HidKey_B | HidKey_Plus)) { in_menu = false; running = false; break; }
+                if (mk & HidNpadButton_A) { do_enter_key(); in_menu = false; }
+                else if (mk & HidNpadButton_X) { do_show_current_key(); wait_any_key(); in_menu = false; }
+                else if (mk & HidNpadButton_Y) { do_toggle_force(); wait_any_key(); in_menu = false; }
+                else if (mk & (HidNpadButton_B | HidNpadButton_Plus)) { in_menu = false; running = false; break; }
                 svcSleepThread(16 * 1000 * 1000ULL);
             }
         }
@@ -263,7 +268,7 @@ int main(int argc, char* argv[]) {
     // Tear down.
     socketExit();
     timeExit();
-    nifmClose();
+    nifmExit();
     pmshellExit();
     setsysExit();
     fsExit();
