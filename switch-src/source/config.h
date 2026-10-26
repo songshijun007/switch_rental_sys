@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>   // ✅ 新增，修复 uint64_t 未定义错误
 
 // -----------------------------------------------------------------------------
 // Build-time defaults for the rental lock system.
