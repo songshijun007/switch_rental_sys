@@ -19,7 +19,7 @@ jobs:
       DEVKITPRO: /opt/devkitpro
       DEVKITA64: /opt/devkitpro/devkitA64
       LIBNX: /opt/devkitpro/libnx
-      PATH: /opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/devkitpacman/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PATH: /opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
     defaults:
       run:
@@ -39,9 +39,17 @@ jobs:
           apt-get update || true
           apt-get install -y --no-install-recommends zip
 
-          # ✅ 用完整路径调用 dkp-pacman，避免 PATH 问题
-          /opt/devkitpro/devkitpacman/bin/dkp-pacman --noconfirm -Syu
-          /opt/devkitpro/devkitpacman/bin/dkp-pacman --noconfirm -S switch-dev
+          # 调试：确认 dkp-pacman 实际位置
+          echo "=== Locating dkp-pacman ==="
+          which dkp-pacman || find / -iname "*dkp-pacman*" 2>/dev/null || true
+
+          # ✅ 直接用命令名，依赖 PATH 自动查找（镜像自带路径为 /opt/devkitpro/tools/bin）
+          if command -v dkp-pacman >/dev/null 2>&1; then
+            dkp-pacman --noconfirm -Syu || true
+            dkp-pacman --noconfirm -S switch-dev || true
+          else
+            echo "⚠️ dkp-pacman not found, assuming switch-dev is pre-installed in base image."
+          fi
 
           # ✅ 验证关键文件确实存在，安装失败会在这里暴露
           echo "=== Verifying installation ==="
