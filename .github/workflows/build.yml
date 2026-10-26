@@ -27,9 +27,12 @@ jobs:
         run: |
           set -e
           export DEBIAN_FRONTEND=noninteractive
-          export PATH=$DEVKITPRO/devkitA64/bin:$PATH  # ← 新增
+          export PATH=$DEVKITPRO/devkitA64/bin:$PATH
           apt-get update || true
           apt-get install -y --no-install-recommends zip
+          # ✅ 新增：通过 dkp-pacman 安装 libnx（Switch SDK）
+          dkp-pacman -Syu --noconfirm
+          dkp-pacman -S --noconfirm switch-dev
           echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
           elf2nro --version || true
@@ -37,7 +40,9 @@ jobs:
       - name: Build NRO
         run: |
           set -e
-          export PATH=$DEVKITPRO/devkitA64/bin:$PATH  # ← 新增
+          export PATH=$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH
+          # ✅ 新增：让 pkg-config 能找到 libnx 和 portlibs
+          export PKG_CONFIG_PATH=$DEVKITPRO/libnx/lib/pkgconfig:$DEVKITPRO/portlibs/switch/lib/pkgconfig
           if [ -n "${{ secrets.RENTAL_SALT }}" ]; then
             export SALT_ARG="RENTAL_SALT=${{ secrets.RENTAL_SALT }}"
           else
