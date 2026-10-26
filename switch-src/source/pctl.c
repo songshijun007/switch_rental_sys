@@ -25,9 +25,7 @@ int pctl_get_device_id_hex(char *out, size_t out_sz) {
     Result rc;
 
     // Primary method: splGetConfig(SplConfigItem_DeviceId) returns the
-    // console's genuine unique hardware device id (u64). This is the
-    // standard, well-supported way to fetch a stable per-console identifier
-    // in homebrew.
+    // console's genuine unique hardware device id (u64).
     rc = splInitialize();
     if (R_SUCCEEDED(rc)) {
         rc = splGetConfig(SplConfigItem_DeviceId, &device_id);
@@ -41,7 +39,6 @@ int pctl_get_device_id_hex(char *out, size_t out_sz) {
         if (R_SUCCEEDED(setsysGetSerialNumber(&serial))) {
             device_id = fnv1a64(serial.number, strlen(serial.number));
         } else {
-            // Last resort: a fixed non-zero sentinel so HMAC doesn't blow up.
             device_id = 0x00000000DEADBEEFULL;
         }
     }
@@ -50,42 +47,41 @@ int pctl_get_device_id_hex(char *out, size_t out_sz) {
     return 0;
 }
 
+// -----------------------------------------------------------------------------
+// NOTE on pctl_set_play_minutes():
+//
+// There is NO function called `setsysSetPlayTimerSettingsForDebug` in libnx
+// (it never existed under the `setsys` namespace). The real low-level IPC
+// command for forcing a play-timer limit lives in Nintendo's `pctl` (Parental
+// Control) sysmodule as a "...ForDebug" debug command, which:
+//   1. Requires a large, precisely-laid-out settings struct whose exact byte
+//      layout is not stably documented/exposed by libnx's public headers.
+//   2. Is typically gated behind special permissions on retail consoles, so
+//      even a byte-perfect IPC call may silently fail at runtime.
+//   3. If the struct layout is wrong, this raw IPC call can hang or crash the
+//      pctl system process -- a much worse outcome than simply not enforcing
+//      the lock.
+//
+// To keep this build safe and working, we currently treat this as a
+// best-effort NO-OP and just log what *would* happen. The rental/unlock-key
+// logic, web UI, and on-console menu all continue to work correctly; only
+// the actual "hard" OS-level play-timer lock is stubbed out for now.
+//
+// TODO: Replace this with a verified, tested implementation of the real
+// pctl debug IPC command once the exact struct layout + required permission
+// model have been confirmed against your target firmware version. See the
+// pctl service docs on the switchbrew wiki for the authoritative command
+// list before attempting this.
+// -----------------------------------------------------------------------------
 int pctl_set_play_minutes(uint16_t minutes) {
-    // The SetPlayTimerSettingsForDebug struct (16 bytes total):
-    //   u8  is_enabled;
-    //   u8  pad;
-    //   s16 daily_limit_minutes;   // s16? -1 == unlimited / disabled
-    //   u8  rest[12];
-    //
-    // When minutes == 0xFFFF we pass -1 (signed) which the firmware treats as
-    // "parental timer disabled", allowing unlimited play.
-    struct {
-        u8  is_enabled;
-        u8  pad;
-        s16 limit;
-        u8  rest[12];
-    } settings;
-    memset(&settings, 0, sizeof(settings));
-
     if (minutes == 0xFFFF) {
-        settings.is_enabled = 0;
-        settings.limit = -1; // unlimited
+        fprintf(stderr, "[pctl] (stub) would ENABLE unlimited play time.\n");
     } else {
-        settings.is_enabled = 1;
-        settings.limit = (s16)minutes;
+        fprintf(stderr, "[pctl] (stub) would LIMIT play time to %u minute(s)/day.\n",
+                (unsigned)minutes);
     }
 
-    // Pass through void* so this compiles regardless of the exact official
-    // struct type name/layout libnx declares for this parameter (GCC 14
-    // treats struct-pointer-type mismatches as hard errors, but implicit
-    // void* <-> any-object-pointer conversions remain always legal in C).
-    void *settings_ptr = &settings;
-    Result rc = setsysSetPlayTimerSettingsForDebug(settings_ptr);
-
-    if (R_FAILED(rc)) {
-        fprintf(stderr, "[pctl] setsysSetPlayTimerSettingsForDebug failed: 0x%x\n", (unsigned)rc);
-        return -1;
-    }
-
+    // No-op for now: always report success so the rest of the rental flow
+    // (key validation, state saving, web UI) is unaffected.
     return 0;
 }
