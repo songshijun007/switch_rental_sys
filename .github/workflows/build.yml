@@ -13,26 +13,42 @@ jobs:
     name: Build Switch NRO
     runs-on: ubuntu-latest
     container: devkitpro/devkita64:latest
+
+    # ✅ job 级别统一设置所有环境变量，每个步骤都继承
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITA64: /opt/devkitpro/devkitA64
+      LIBNX: /opt/devkitpro/libnx
+      PATH: /opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/devkitpacman/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
     defaults:
       run:
         working-directory: switch-src
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install host utilities
+      - name: Install dependencies
         working-directory: /
         run: |
           set -e
           export DEBIAN_FRONTEND=noninteractive
-          export PATH=$DEVKITPRO/devkitA64/bin:$PATH
           apt-get update || true
           apt-get install -y --no-install-recommends zip
-          # ✅ 新增：通过 dkp-pacman 安装 libnx（Switch SDK）
-          dkp-pacman -Syu --noconfirm
-          dkp-pacman -S --noconfirm switch-dev
+
+          # ✅ 用完整路径调用 dkp-pacman，避免 PATH 问题
+          /opt/devkitpro/devkitpacman/bin/dkp-pacman --noconfirm -Syu
+          /opt/devkitpro/devkitpacman/bin/dkp-pacman --noconfirm -S switch-dev
+
+          # ✅ 验证关键文件确实存在，安装失败会在这里暴露
+          echo "=== Verifying installation ==="
+          ls /opt/devkitpro/libnx/include/switch.h
+          ls /opt/devkitpro/libnx/lib/pkgconfig/libnx.pc
+          echo "libnx installed successfully!"
+
           echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
           elf2nro --version || true
@@ -40,9 +56,8 @@ jobs:
       - name: Build NRO
         run: |
           set -e
-          export PATH=$DEVKITPRO/devkitA64/bin:$DEVKITPRO/tools/bin:$PATH
-          # ✅ 新增：让 pkg-config 能找到 libnx 和 portlibs
           export PKG_CONFIG_PATH=$DEVKITPRO/libnx/lib/pkgconfig:$DEVKITPRO/portlibs/switch/lib/pkgconfig
+
           if [ -n "${{ secrets.RENTAL_SALT }}" ]; then
             export SALT_ARG="RENTAL_SALT=${{ secrets.RENTAL_SALT }}"
           else
