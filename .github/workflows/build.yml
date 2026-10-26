@@ -27,10 +27,9 @@ jobs:
         run: |
           set -e
           export DEBIAN_FRONTEND=noninteractive
+          export PATH=$DEVKITPRO/devkitA64/bin:$PATH  # ← 新增
           apt-get update || true
           apt-get install -y --no-install-recommends zip
-          # The container already includes devkitA64 + libnx + tools like
-          # elf2nro, nacptool, etc.
           echo "DEVKITPRO=$DEVKITPRO"
           aarch64-none-elf-gcc --version
           elf2nro --version || true
@@ -38,8 +37,7 @@ jobs:
       - name: Build NRO
         run: |
           set -e
-          # Default salt can be injected via GitHub variable if desired.
-          # If RENTAL_SALT secret is set, pass it to make; otherwise use default.
+          export PATH=$DEVKITPRO/devkitA64/bin:$PATH  # ← 新增
           if [ -n "${{ secrets.RENTAL_SALT }}" ]; then
             export SALT_ARG="RENTAL_SALT=${{ secrets.RENTAL_SALT }}"
           else
